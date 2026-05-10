@@ -1,13 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { useQuery, useMutation } from '@tanstack/react-query';
-import PageHeader from '../../components/ui/PageHeader';
-import Input, { fieldClass } from '../../components/ui/Input';
-import { listTimeSlots } from '../../api/timeSlots';
-import { customerBooking } from '../../api/bookings';
-import useAuthStore from '../../store/authStore';
-import { useToast } from '../../context/ToastContext';
-import { useCompany } from '../../context/CompanyContext';
+import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import PageHeader from "../../components/ui/PageHeader";
+import Input, { fieldClass } from "../../components/ui/Input";
+import { listTimeSlots } from "../../api/timeSlots";
+import { customerBooking } from "../../api/bookings";
+import useAuthStore from "../../store/authStore";
+import { useToast } from "../../context/ToastContext";
+import { useCompany } from "../../context/CompanyContext";
 
 const selectClass = `${fieldClass} cursor-pointer appearance-none pr-10 disabled:cursor-not-allowed`;
 
@@ -18,23 +18,30 @@ function parseSlotTimes(label) {
   return { start: m[1], end: m[2] };
 }
 
-/** Full wall-clock range for `hours` consecutive slots starting at `startIndex` */
 function formatBlockRange(slots, startIndex, hours) {
   const h = Math.max(1, Math.min(24, Math.floor(Number(hours)) || 1));
   if (startIndex < 0 || startIndex + h > slots.length) return null;
   const first = parseSlotTimes(slots[startIndex].label);
   const last = parseSlotTimes(slots[startIndex + h - 1].label);
-  if (!first || !last) return slots[startIndex]?.label ?? '';
+  if (!first || !last) return slots[startIndex]?.label ?? "";
   return `${first.start}–${last.end}`;
 }
 
-function FormSection({ eyebrow, title, hint, children, className = '' }) {
+function FormSection({ eyebrow, title, hint, children, className = "" }) {
   return (
     <section className={`px-5 py-6 sm:px-8 sm:py-7 ${className}`}>
       <div className="mb-4">
-        {eyebrow && <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-emerald-700">{eyebrow}</p>}
-        <h2 className="text-base font-semibold text-gray-900 lg:text-lg">{title}</h2>
-        {hint && <p className="mt-1 text-sm text-gray-500 lg:max-w-md">{hint}</p>}
+        {eyebrow && (
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-emerald-700">
+            {eyebrow}
+          </p>
+        )}
+        <h2 className="text-base font-semibold text-gray-900 lg:text-lg">
+          {title}
+        </h2>
+        {hint && (
+          <p className="mt-1 text-sm text-gray-500 lg:max-w-md">{hint}</p>
+        )}
       </div>
       <div className="space-y-4">{children}</div>
     </section>
@@ -47,15 +54,15 @@ export default function BookingForm() {
   const user = useAuthStore((s) => s.user);
   const [done, setDone] = useState(null);
   const [form, setForm] = useState({
-    name: '',
-    email: '',
-    phone: '',
-    booking_date: '',
-    time_slot: '',
+    name: "",
+    email: "",
+    phone: "",
+    booking_date: "",
+    time_slot: "",
     hours: 1,
-    payment_status: 'pending',
+    payment_status: "pending",
     payment_amount: 0,
-    notes: '',
+    notes: "",
   });
   const [file, setFile] = useState(null);
 
@@ -63,14 +70,14 @@ export default function BookingForm() {
     if (!user?.email) return;
     setForm((prev) => ({
       ...prev,
-      name: prev.name || user.name || '',
-      email: prev.email || user.email || '',
-      phone: prev.phone || user.phone || '',
+      name: prev.name || user.name || "",
+      email: prev.email || user.email || "",
+      phone: prev.phone || user.phone || "",
     }));
   }, [user]);
 
   const { data: slotsRes, isLoading: slotsLoading } = useQuery({
-    queryKey: ['time-slots'],
+    queryKey: ["time-slots"],
     queryFn: async () => (await listTimeSlots()).data,
   });
   const slots = slotsRes?.data ?? [];
@@ -81,18 +88,21 @@ export default function BookingForm() {
       Object.entries(form).forEach(([k, v]) => {
         fd.append(k, v);
       });
-      if (file) fd.append('payment_screenshot', file);
-      return customerBooking(fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      if (file) fd.append("payment_screenshot", file);
+      return customerBooking(fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
     },
     onSuccess: (res) => {
       const booking = res.data?.data;
       setDone(booking?.id);
-      showToast('Booking submitted');
+      showToast("Booking submitted");
     },
-    onError: (e) => showToast(e.response?.data?.message || 'Failed'),
+    onError: (e) => showToast(e.response?.data?.message || "Failed"),
   });
 
-  const showScreenshot = form.payment_status === 'paid' || form.payment_status === 'partial';
+  const showScreenshot =
+    form.payment_status === "paid" || form.payment_status === "partial";
 
   const hoursClamped = Math.max(1, Math.min(24, Number(form.hours) || 1));
 
@@ -108,7 +118,7 @@ export default function BookingForm() {
     if (!slots.length || !form.time_slot) return;
     const idx = slots.findIndex((s) => s.label === form.time_slot);
     if (idx < 0 || idx + hoursClamped > slots.length) {
-      setForm((prev) => ({ ...prev, time_slot: '' }));
+      setForm((prev) => ({ ...prev, time_slot: "" }));
     }
   }, [hoursClamped, slots, form.time_slot]);
 
@@ -117,12 +127,12 @@ export default function BookingForm() {
     setFile(null);
     setForm((prev) => ({
       ...prev,
-      booking_date: '',
-      time_slot: '',
+      booking_date: "",
+      time_slot: "",
       hours: 1,
-      payment_status: 'pending',
+      payment_status: "pending",
       payment_amount: 0,
-      notes: '',
+      notes: "",
     }));
   }
 
@@ -142,14 +152,24 @@ export default function BookingForm() {
               className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full bg-emerald-100/90 blur-2xl"
               aria-hidden
             />
-            <div className="relative mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-2xl text-emerald-700 shadow-inner" aria-hidden>
+            <div
+              className="relative mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-2xl text-emerald-700 shadow-inner"
+              aria-hidden
+            >
               ✓
             </div>
-            <p className="text-xl font-bold text-gray-900 lg:text-2xl">Request received</p>
-            <p className="mt-2 text-gray-600">
-              Reference <span className="font-mono font-semibold text-emerald-800">#{done}</span>
+            <p className="text-xl font-bold text-gray-900 lg:text-2xl">
+              Request received
             </p>
-            <p className="mt-2 text-sm text-gray-500">Check your inbox for a pending confirmation from us.</p>
+            <p className="mt-2 text-gray-600">
+              Reference{" "}
+              <span className="font-mono font-semibold text-emerald-800">
+                #{done}
+              </span>
+            </p>
+            <p className="mt-2 text-sm text-gray-500">
+              Check your inbox for a pending confirmation from us.
+            </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center sm:gap-4">
               <button
                 type="button"
@@ -169,9 +189,12 @@ export default function BookingForm() {
         ) : (
           <div className="overflow-hidden rounded-2xl bg-white shadow-xl ring-1 ring-gray-900/5 lg:rounded-3xl lg:shadow-2xl">
             <div className="border-b border-emerald-100/80 bg-gradient-to-r from-emerald-600/[0.08] via-white to-white px-5 py-4 sm:px-8 lg:px-10 lg:py-5">
-              <p className="text-sm font-medium text-emerald-900 lg:text-base">New booking request</p>
+              <p className="text-sm font-medium text-emerald-900 lg:text-base">
+                New booking request
+              </p>
               <p className="mt-0.5 max-w-3xl text-xs text-gray-600 lg:text-sm">
-                Account details are locked; edit them in your profile if we add that later.
+                Account details are locked; edit them in your profile if we add
+                that later.
               </p>
             </div>
 
@@ -191,11 +214,27 @@ export default function BookingForm() {
                   >
                     <div className="rounded-xl border border-gray-200/80 bg-gray-50/90 p-4 sm:p-5 lg:p-6">
                       <div className="grid gap-4 sm:grid-cols-2 lg:gap-5">
-                        <Input label="Name" value={form.name} readOnly required />
-                        <Input label="Email" type="email" value={form.email} readOnly required />
+                        <Input
+                          label="Name"
+                          value={form.name}
+                          readOnly
+                          required
+                        />
+                        <Input
+                          label="Email"
+                          type="email"
+                          value={form.email}
+                          readOnly
+                          required
+                        />
                       </div>
                       <div className="mt-4 lg:mt-5">
-                        <Input label="Phone" value={form.phone} readOnly required />
+                        <Input
+                          label="Phone"
+                          value={form.phone}
+                          readOnly
+                          required
+                        />
                       </div>
                     </div>
                   </FormSection>
@@ -211,7 +250,9 @@ export default function BookingForm() {
                         type="date"
                         value={form.booking_date}
                         min={new Date().toISOString().slice(0, 10)}
-                        onChange={(e) => setForm({ ...form, booking_date: e.target.value })}
+                        onChange={(e) =>
+                          setForm({ ...form, booking_date: e.target.value })
+                        }
                         required
                       />
                       <Input
@@ -220,43 +261,63 @@ export default function BookingForm() {
                         min={1}
                         max={24}
                         value={form.hours}
-                        onChange={(e) => setForm({ ...form, hours: Number(e.target.value) })}
+                        onChange={(e) =>
+                          setForm({ ...form, hours: Number(e.target.value) })
+                        }
                         required
                       />
                     </div>
                     <label className="mt-4 flex flex-col gap-1.5 text-sm lg:mt-5">
                       <span className="font-medium text-gray-700">
-                        Start time ({hoursClamped} consecutive hour{hoursClamped === 1 ? '' : 's'})
+                        Start time ({hoursClamped} consecutive hour
+                        {hoursClamped === 1 ? "" : "s"})
                       </span>
                       <p className="text-xs text-gray-500">
-                        Options list your full block (e.g. 3h from 06:00 → 06:00–09:00). Value sent to the server is still the first one-hour slot.
+                        Options list your full block (e.g. 3h from 06:00 →
+                        06:00–09:00). Value sent to the server is still the
+                        first one-hour slot.
                       </p>
                       <div className="relative">
                         <select
                           className={selectClass}
                           value={form.time_slot}
-                          onChange={(e) => setForm({ ...form, time_slot: e.target.value })}
+                          onChange={(e) =>
+                            setForm({ ...form, time_slot: e.target.value })
+                          }
                           required
                           disabled={slotsLoading}
                         >
-                          <option value="">{slotsLoading ? 'Loading slots…' : 'Select start time'}</option>
+                          <option value="">
+                            {slotsLoading
+                              ? "Loading slots…"
+                              : "Select start time"}
+                          </option>
                           {slots.map((s, i) => {
                             const valid = i + hoursClamped <= slots.length;
                             const display = valid
                               ? formatBlockRange(slots, i, hoursClamped)
                               : `${parseSlotTimes(s.label)?.start ?? s.label} (not enough slots for ${hoursClamped}h)`;
                             return (
-                              <option key={s.id} value={s.label} disabled={!valid}>
+                              <option
+                                key={s.id}
+                                value={s.label}
+                                disabled={!valid}
+                              >
                                 {display}
                               </option>
                             );
                           })}
                         </select>
-                        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">▾</span>
+                        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
+                          ▾
+                        </span>
                       </div>
                       {selectedRangePreview && (
                         <p className="text-xs font-medium text-emerald-800">
-                          Your session: <span className="font-mono">{selectedRangePreview}</span>
+                          Your session:{" "}
+                          <span className="font-mono">
+                            {selectedRangePreview}
+                          </span>
                         </p>
                       )}
                     </label>
@@ -271,15 +332,17 @@ export default function BookingForm() {
                     hint="Admins will match this with your transfer or cash record."
                   >
                     <div className="grid grid-cols-3 gap-2 rounded-xl bg-gray-100 p-1.5">
-                      {['pending', 'paid', 'partial'].map((v) => (
+                      {["pending", "paid", "partial"].map((v) => (
                         <button
                           key={v}
                           type="button"
-                          onClick={() => setForm({ ...form, payment_status: v })}
+                          onClick={() =>
+                            setForm({ ...form, payment_status: v })
+                          }
                           className={`rounded-lg py-2.5 text-xs font-semibold capitalize transition sm:text-sm ${
                             form.payment_status === v
-                              ? 'bg-white text-emerald-900 shadow-sm ring-1 ring-gray-200/90'
-                              : 'text-gray-600 hover:text-gray-900'
+                              ? "bg-white text-emerald-900 shadow-sm ring-1 ring-gray-200/90"
+                              : "text-gray-600 hover:text-gray-900"
                           }`}
                         >
                           {v}
@@ -292,12 +355,17 @@ export default function BookingForm() {
                       min={0}
                       step="0.01"
                       value={form.payment_amount}
-                      onChange={(e) => setForm({ ...form, payment_amount: e.target.value })}
+                      onChange={(e) =>
+                        setForm({ ...form, payment_amount: e.target.value })
+                      }
                       required
                     />
                     {showScreenshot && (
                       <div>
-                        <label htmlFor="booking-payment-file" className="text-sm font-medium text-gray-700">
+                        <label
+                          htmlFor="booking-payment-file"
+                          className="text-sm font-medium text-gray-700"
+                        >
                           Payment screenshot
                         </label>
                         <label
@@ -309,13 +377,24 @@ export default function BookingForm() {
                             type="file"
                             className="sr-only"
                             accept=".jpg,.jpeg,.png,.pdf"
-                            onChange={(e) => setFile(e.target.files?.[0] || null)}
+                            onChange={(e) =>
+                              setFile(e.target.files?.[0] || null)
+                            }
                           />
                           <span className="text-sm text-gray-600">
-                            <span className="font-medium text-emerald-700">Choose file</span>
-                            <span className="text-gray-400"> or tap to upload</span>
+                            <span className="font-medium text-emerald-700">
+                              Choose file
+                            </span>
+                            <span className="text-gray-400">
+                              {" "}
+                              or tap to upload
+                            </span>
                           </span>
-                          {file && <p className="mt-2 text-xs font-medium text-emerald-900">{file.name}</p>}
+                          {file && (
+                            <p className="mt-2 text-xs font-medium text-emerald-900">
+                              {file.name}
+                            </p>
+                          )}
                         </label>
                       </div>
                     )}
@@ -331,7 +410,9 @@ export default function BookingForm() {
                       rows={5}
                       placeholder="Optional message to the ground team…"
                       value={form.notes}
-                      onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                      onChange={(e) =>
+                        setForm({ ...form, notes: e.target.value })
+                      }
                     />
                   </FormSection>
                 </div>
@@ -346,7 +427,9 @@ export default function BookingForm() {
                   disabled={mutation.isPending}
                   className="order-1 w-full rounded-xl bg-gradient-to-b from-emerald-600 to-emerald-700 px-6 py-3.5 text-base font-semibold text-white shadow-md shadow-emerald-900/15 transition hover:from-emerald-500 hover:to-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 lg:order-2 lg:w-auto lg:min-w-[200px] lg:shrink-0 xl:min-w-[240px]"
                 >
-                  {mutation.isPending ? 'Submitting…' : 'Submit booking request'}
+                  {mutation.isPending
+                    ? "Submitting…"
+                    : "Submit booking request"}
                 </button>
               </div>
             </form>
