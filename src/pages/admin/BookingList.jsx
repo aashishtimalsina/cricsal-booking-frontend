@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router-dom';
 import PageHeader from '../../components/ui/PageHeader';
@@ -72,10 +72,6 @@ export default function BookingList() {
 
   const canPrev = meta && meta.current_page > 1;
   const canNext = meta && meta.current_page < meta.last_page;
-
-  useEffect(() => {
-    setPage(1);
-  }, [status, search, start, end]);
 
   function openPaymentModal(b) {
     setPaymentEdit(b);
@@ -204,7 +200,8 @@ export default function BookingList() {
         </Link>
       </div>
       <PageHeader title="Bookings" subtitle="Manage ground reservations" />
-      <div className="mb-4 flex flex-wrap gap-3">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap gap-3">
         <select
           className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
           value={status}
@@ -250,6 +247,13 @@ export default function BookingList() {
             setPage(1);
           }}
         />
+        </div>
+        <Link
+          to="/admin/bookings/new"
+          className="inline-flex shrink-0 items-center justify-center rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm ring-1 ring-emerald-700/30 hover:bg-emerald-700"
+        >
+          New booking
+        </Link>
       </div>
 
       {isLoading ? (
@@ -411,7 +415,7 @@ export default function BookingList() {
               <strong>Name:</strong> {detail.name}
             </p>
             <p>
-              <strong>Email:</strong> {detail.email}
+              <strong>Email:</strong> {detail.email || '—'}
             </p>
             <p>
               <strong>Phone:</strong> {detail.phone}

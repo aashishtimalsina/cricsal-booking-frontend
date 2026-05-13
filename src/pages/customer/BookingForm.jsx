@@ -65,6 +65,8 @@ export default function BookingForm() {
     notes: "",
   });
   const [file, setFile] = useState(null);
+  /** Set when API returns 422 slot conflict (message + optional conflicts list). */
+  const [submitError, setSubmitError] = useState(null);
 
   useEffect(() => {
     if (!user?.email) return;
@@ -96,9 +98,16 @@ export default function BookingForm() {
     onSuccess: (res) => {
       const booking = res.data?.data;
       setDone(booking?.id);
+      setSubmitError(null);
       showToast("Booking submitted");
     },
-    onError: (e) => showToast(e.response?.data?.message || "Failed"),
+    onError: (e) => {
+      const data = e.response?.data;
+      const message = data?.message || "Failed";
+      const conflicts = Array.isArray(data?.conflicts) ? data.conflicts : [];
+      setSubmitError({ message, conflicts });
+      showToast(message);
+    },
   });
 
   const showScreenshot =
@@ -125,6 +134,7 @@ export default function BookingForm() {
   function bookAnother() {
     setDone(null);
     setFile(null);
+    setSubmitError(null);
     setForm((prev) => ({
       ...prev,
       booking_date: "",
@@ -204,6 +214,36 @@ export default function BookingForm() {
                 mutation.mutate();
               }}
             >
+              {submitError && (
+                <div
+                  role="alert"
+                  className="border-b border-amber-200 bg-amber-50 px-5 py-4 sm:px-8 lg:px-10"
+                >
+                  <p className="text-sm font-semibold text-amber-950">
+                    {submitError.message}
+                  </p>
+                  {submitError.conflicts.length > 0 && (
+                    <ul className="mt-3 list-inside list-disc space-y-1 text-sm text-amber-900">
+                      {submitError.conflicts.map((c) => (
+                        <li key={c.id}>
+                          <span className="font-medium">{c.name}</span>
+                          <span className="text-amber-800/90">
+                            {" "}
+                            — {c.status}
+                            {c.time_slot ? (
+                              <>
+                                {" "}
+                                · slot {c.time_slot}
+                                {c.hours > 1 ? ` (${c.hours}h)` : ""}
+                              </>
+                            ) : null}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
               <div className="lg:grid lg:grid-cols-12 lg:divide-x lg:divide-gray-100">
                 {/* Left: profile + session */}
                 <div className="divide-y divide-gray-100 lg:col-span-7 lg:divide-y">
@@ -250,9 +290,10 @@ export default function BookingForm() {
                         type="date"
                         value={form.booking_date}
                         min={new Date().toISOString().slice(0, 10)}
-                        onChange={(e) =>
-                          setForm({ ...form, booking_date: e.target.value })
-                        }
+                        onChange={(e) => {
+                          setSubmitError(null);
+                          setForm({ ...form, booking_date: e.target.value });
+                        }}
                         required
                       />
                       <Input
@@ -261,9 +302,10 @@ export default function BookingForm() {
                         min={1}
                         max={24}
                         value={form.hours}
-                        onChange={(e) =>
-                          setForm({ ...form, hours: Number(e.target.value) })
-                        }
+                        onChange={(e) => {
+                          setSubmitError(null);
+                          setForm({ ...form, hours: Number(e.target.value) });
+                        }}
                         required
                       />
                     </div>
@@ -281,9 +323,10 @@ export default function BookingForm() {
                         <select
                           className={selectClass}
                           value={form.time_slot}
-                          onChange={(e) =>
-                            setForm({ ...form, time_slot: e.target.value })
-                          }
+                          onChange={(e) => {
+                            setSubmitError(null);
+                            setForm({ ...form, time_slot: e.target.value });
+                          }}
                           required
                           disabled={slotsLoading}
                         >
