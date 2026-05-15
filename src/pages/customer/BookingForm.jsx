@@ -8,8 +8,13 @@ import { customerBooking } from "../../api/bookings";
 import useAuthStore from "../../store/authStore";
 import { useToast } from "../../context/ToastContext";
 import { useCompany } from "../../context/CompanyContext";
+import { compressPaymentScreenshot } from "../../utils/compressPaymentScreenshot";
 
 const selectClass = `${fieldClass} cursor-pointer appearance-none pr-10 disabled:cursor-not-allowed`;
+
+/** Fonepay flyer (QR) in `public/` — same URL used for display and download */
+const FONEPAY_FLYER_SRC = "/phone-pay.jpeg";
+const FONEPAY_FLYER_FILENAME = "fonepay-payment-qr.jpeg";
 
 /** Parse "06:00-07:00" style slot labels from the API */
 function parseSlotTimes(label) {
@@ -65,6 +70,7 @@ export default function BookingForm() {
     notes: "",
   });
   const [file, setFile] = useState(null);
+  const [fileCompressing, setFileCompressing] = useState(false);
   /** Set when API returns 422 slot conflict (message + optional conflicts list). */
   const [submitError, setSubmitError] = useState(null);
 
@@ -134,6 +140,7 @@ export default function BookingForm() {
   function bookAnother() {
     setDone(null);
     setFile(null);
+    setFileCompressing(false);
     setSubmitError(null);
     setForm((prev) => ({
       ...prev,
@@ -372,7 +379,11 @@ export default function BookingForm() {
                   <FormSection
                     eyebrow="Payment"
                     title="Amount & status"
-                    hint="Admins will match this with your transfer or cash record."
+                    hint={
+                      showScreenshot
+                        ? "Pay with Fonepay using the QR below, then upload proof so we can verify your booking."
+                        : "If you choose paid or partial, we will show our Fonepay QR and ask for a payment screenshot."
+                    }
                   >
                     <div className="grid grid-cols-3 gap-2 rounded-xl bg-gray-100 p-1.5">
                       {["pending", "paid", "partial"].map((v) => (
@@ -404,41 +415,148 @@ export default function BookingForm() {
                       required
                     />
                     {showScreenshot && (
-                      <div>
-                        <label
-                          htmlFor="booking-payment-file"
-                          className="text-sm font-medium text-gray-700"
-                        >
-                          Payment screenshot
-                        </label>
-                        <label
-                          htmlFor="booking-payment-file"
-                          className="mt-2 flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-200 bg-white/80 px-4 py-8 transition hover:border-emerald-300 hover:bg-emerald-50/40 lg:py-10"
-                        >
+                      <div className="space-y-5">
+                        <div className="rounded-xl border border-emerald-200/80 bg-gradient-to-b from-white to-emerald-50/40 p-4 shadow-sm ring-1 ring-emerald-900/5 sm:p-5">
+                          <p className="text-sm font-semibold text-emerald-950">
+                            Pay here (Fonepay)
+                          </p>
+                          <p className="mt-2 text-sm leading-relaxed text-gray-700">
+                            Enter the correct amount above, then open your mobile
+                            banking app or digital wallet that supports{" "}
+                            <span className="font-medium">Fonepay</span>. Scan
+                            the QR code on the flyer below, check that the
+                            merchant is{" "}
+                            <span className="font-medium">{company.name}</span>{" "}
+                            and the amount matches, and complete the payment.
+                          </p>
+                          <div className="mt-4 flex justify-center">
+                            <figure className="max-w-[280px] overflow-hidden rounded-lg border border-gray-200 bg-white shadow-md sm:max-w-xs">
+                              <img
+                                src={FONEPAY_FLYER_SRC}
+                                alt={`Fonepay QR code for ${company.name} — scan with your bank app or wallet to pay`}
+                                className="h-auto w-full object-contain"
+                                width={320}
+                                height={480}
+                                loading="lazy"
+                                decoding="async"
+                              />
+                              <figcaption className="border-t border-gray-100 bg-gray-50 px-3 py-2 text-center text-[11px] text-gray-600">
+                                Official Fonepay flyer — scan to pay
+                              </figcaption>
+                            </figure>
+                          </div>
+                          <div className="mt-3 flex flex-col items-center gap-2">
+                            <a
+                              href={FONEPAY_FLYER_SRC}
+                              download={FONEPAY_FLYER_FILENAME}
+                              className="inline-flex items-center justify-center rounded-lg border border-emerald-300 bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
+                            >
+                              Download QR flyer
+                            </a>
+                            <p className="max-w-sm text-center text-xs text-gray-600">
+                              Save the image to your phone if you want to scan
+                              the code from your gallery instead of the screen.
+                            </p>
+                          </div>
+                          <p className="mt-4 text-sm font-medium text-gray-900">
+                            After you pay
+                          </p>
+                          <p className="mt-1 text-sm leading-relaxed text-gray-700">
+                            In your banking app, open the payment success screen
+                            or receipt. Take a clear screenshot (or save the
+                            PDF if your bank offers it), then upload it in the
+                            next step. We use this to confirm your transfer
+                            matches your booking request.
+                          </p>
+                        </div>
+
+                        <div className="space-y-2">
+                          <label
+                            htmlFor="booking-payment-file"
+                            className="text-sm font-medium text-gray-700"
+                          >
+                            Payment proof (screenshot)
+                          </label>
+                          <p className="text-xs text-gray-500">
+                            Upload the success screen from after you completed
+                            payment. Photos (JPG/PNG/WebP) are automatically
+                            resized and compressed before sending; PDFs are left
+                            as-is.
+                          </p>
+                          <label
+                            htmlFor="booking-payment-file"
+                            className={`mt-2 flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-200 bg-white/80 px-4 py-8 transition hover:border-emerald-300 hover:bg-emerald-50/40 lg:py-10 ${
+                              fileCompressing
+                                ? "pointer-events-none opacity-70"
+                                : ""
+                            }`}
+                          >
                           <input
                             id="booking-payment-file"
                             type="file"
                             className="sr-only"
-                            accept=".jpg,.jpeg,.png,.pdf"
-                            onChange={(e) =>
-                              setFile(e.target.files?.[0] || null)
-                            }
+                            accept=".jpg,.jpeg,.png,.webp,.pdf"
+                            disabled={fileCompressing}
+                            onChange={async (e) => {
+                              const input = e.target;
+                              const picked = input.files?.[0] ?? null;
+                              input.value = "";
+                              if (!picked) {
+                                setFile(null);
+                                return;
+                              }
+                              const isRaster =
+                                picked.type.startsWith("image/") &&
+                                picked.type !== "image/svg+xml";
+                              if (!isRaster) {
+                                setFile(picked);
+                                return;
+                              }
+                              setFileCompressing(true);
+                              try {
+                                const compressed =
+                                  await compressPaymentScreenshot(picked);
+                                setFile(compressed);
+                              } catch {
+                                setFile(picked);
+                                showToast(
+                                  "Could not compress image; using your original file."
+                                );
+                              } finally {
+                                setFileCompressing(false);
+                              }
+                            }}
                           />
                           <span className="text-sm text-gray-600">
-                            <span className="font-medium text-emerald-700">
-                              Choose file
-                            </span>
-                            <span className="text-gray-400">
-                              {" "}
-                              or tap to upload
-                            </span>
+                            {fileCompressing ? (
+                              <span className="font-medium text-emerald-800">
+                                Compressing image…
+                              </span>
+                            ) : (
+                              <>
+                                <span className="font-medium text-emerald-700">
+                                  Choose file
+                                </span>
+                                <span className="text-gray-400">
+                                  {" "}
+                                  or tap to upload
+                                </span>
+                              </>
+                            )}
                           </span>
-                          {file && (
+                          {file && !fileCompressing && (
                             <p className="mt-2 text-xs font-medium text-emerald-900">
                               {file.name}
+                              <span className="block font-normal text-gray-600">
+                                {Math.max(1, Math.round(file.size / 1024))} KB
+                                {file.type === "image/jpeg"
+                                  ? " · optimized JPEG"
+                                  : ""}
+                              </span>
                             </p>
                           )}
                         </label>
+                        </div>
                       </div>
                     )}
                   </FormSection>
@@ -467,12 +585,14 @@ export default function BookingForm() {
                 </p>
                 <button
                   type="submit"
-                  disabled={mutation.isPending}
+                  disabled={mutation.isPending || fileCompressing}
                   className="order-1 w-full rounded-xl bg-gradient-to-b from-emerald-600 to-emerald-700 px-6 py-3.5 text-base font-semibold text-white shadow-md shadow-emerald-900/15 transition hover:from-emerald-500 hover:to-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 lg:order-2 lg:w-auto lg:min-w-[200px] lg:shrink-0 xl:min-w-[240px]"
                 >
                   {mutation.isPending
                     ? "Submitting…"
-                    : "Submit booking request"}
+                    : fileCompressing
+                      ? "Preparing file…"
+                      : "Submit booking request"}
                 </button>
               </div>
             </form>

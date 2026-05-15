@@ -37,6 +37,7 @@ export default function SmsLogs() {
                 <th className="px-4 py-3">Phone</th>
                 <th className="px-4 py-3">Message</th>
                 <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3 max-w-[14rem]">Gateway</th>
                 <th className="px-4 py-3">Sent</th>
               </tr>
             </thead>
@@ -47,6 +48,11 @@ export default function SmsLogs() {
                   <td className="px-4 py-3">{r.recipient_phone}</td>
                   <td className="max-w-xs truncate px-4 py-3">{r.message}</td>
                   <td className="px-4 py-3">{r.status}</td>
+                  <td className="max-w-[14rem] truncate px-4 py-3 font-mono text-xs text-gray-600" title={r.gateway_response || ''}>
+                    {r.gateway_response
+                      ? String(r.gateway_response).replace(/^smspasal http=\d+ body=/, '')
+                      : '—'}
+                  </td>
                   <td className="px-4 py-3">{r.sent_at}</td>
                 </tr>
               ))}
