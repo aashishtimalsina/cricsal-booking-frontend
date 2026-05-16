@@ -94,7 +94,12 @@ export default function StudentEdit() {
         <Input label="Phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} required />
         <Input label="Guardian" value={form.guardian_name} onChange={(e) => setForm({ ...form, guardian_name: e.target.value })} />
         <Input label="Address" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
-        <NepaliDateField label="Registration date (BS)" value={regNp} onChange={setRegNp} />
+        <NepaliDateField
+          label="Registration date (BS)"
+          value={regNp}
+          onChange={setRegNp}
+          onAdDateChange={(ad) => setForm((prev) => ({ ...prev, reg_date_en: ad }))}
+        />
         <Input
           label="Registration date (AD)"
           type="date"

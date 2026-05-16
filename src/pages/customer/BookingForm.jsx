@@ -4,9 +4,15 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import PageHeader from "../../components/ui/PageHeader";
 import Input, { fieldClass } from "../../components/ui/Input";
 import { listTimeSlots } from "../../api/timeSlots";
-import { customerBooking } from "../../api/bookings";
+import { customerBooking, getSlotAvailability } from "../../api/bookings";
 import useAuthStore from "../../store/authStore";
 import { useToast } from "../../context/ToastContext";
+import {
+  BOOKING_PAYMENT_STATUSES,
+  DEFAULT_BOOKING_PAYMENT_STATUS,
+  bookingPaymentStatusLabel,
+  bookingRequiresPaymentProof,
+} from "../../constants/bookingPayment";
 import { useCompany } from "../../context/CompanyContext";
 import { compressPaymentScreenshot } from "../../utils/compressPaymentScreenshot";
 
@@ -65,7 +71,7 @@ export default function BookingForm() {
     booking_date: "",
     time_slot: "",
     hours: 1,
-    payment_status: "pending",
+    payment_status: DEFAULT_BOOKING_PAYMENT_STATUS,
     payment_amount: 0,
     notes: "",
   });
@@ -89,6 +95,25 @@ export default function BookingForm() {
     queryFn: async () => (await listTimeSlots()).data,
   });
   const slots = slotsRes?.data ?? [];
+
+  const hoursClamped = Math.max(1, Math.min(24, Number(form.hours) || 1));
+
+  const { data: availabilityRes, isLoading: availabilityLoading } = useQuery({
+    queryKey: ["slot-availability", form.booking_date, hoursClamped],
+    queryFn: async () =>
+      (
+        await getSlotAvailability({
+          booking_date: form.booking_date,
+          hours: hoursClamped,
+        })
+      ).data,
+    enabled: Boolean(form.booking_date),
+  });
+
+  const unavailableLabels = useMemo(() => {
+    const list = availabilityRes?.data?.unavailable;
+    return new Set(Array.isArray(list) ? list : []);
+  }, [availabilityRes]);
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -116,10 +141,19 @@ export default function BookingForm() {
     },
   });
 
-  const showScreenshot =
-    form.payment_status === "paid" || form.payment_status === "partial";
+  const showScreenshot = bookingRequiresPaymentProof(form.payment_status);
 
-  const hoursClamped = Math.max(1, Math.min(24, Number(form.hours) || 1));
+  function validatePaymentForSubmit() {
+    if (!showScreenshot) return null;
+    const amount = Number(form.payment_amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return "Payment amount must be greater than 0 for Paid or Advance.";
+    }
+    if (!file) {
+      return "Please upload a payment proof screenshot for Paid or Advance.";
+    }
+    return null;
+  }
 
   const selectedRangePreview = useMemo(() => {
     if (!form.time_slot || !slots.length) return null;
@@ -137,6 +171,14 @@ export default function BookingForm() {
     }
   }, [hoursClamped, slots, form.time_slot]);
 
+  /** Clear start time when it becomes unavailable for the chosen date */
+  useEffect(() => {
+    if (!form.booking_date || !form.time_slot) return;
+    if (unavailableLabels.has(form.time_slot)) {
+      setForm((prev) => ({ ...prev, time_slot: "" }));
+    }
+  }, [form.booking_date, form.time_slot, unavailableLabels]);
+
   function bookAnother() {
     setDone(null);
     setFile(null);
@@ -147,7 +189,7 @@ export default function BookingForm() {
       booking_date: "",
       time_slot: "",
       hours: 1,
-      payment_status: "pending",
+      payment_status: DEFAULT_BOOKING_PAYMENT_STATUS,
       payment_amount: 0,
       notes: "",
     }));
@@ -160,7 +202,7 @@ export default function BookingForm() {
           className="lg:mb-10"
           eyebrow="Ground booking"
           title="Book a cricket ground"
-          subtitle={`Request a slot with ${company.name}. You will receive email updates while your booking is pending and when it is confirmed.`}
+          subtitle={`Request a slot with ${company.name}. After our team confirms your booking, you will receive an SMS on your phone. Email updates are sent when an email address is provided.`}
         />
 
         {done ? (
@@ -185,7 +227,17 @@ export default function BookingForm() {
               </span>
             </p>
             <p className="mt-2 text-sm text-gray-500">
-              Check your inbox for a pending confirmation from us.
+              We will review your request shortly. After an admin confirms your booking, you
+              will get an SMS on the phone number you provided.
+            </p>
+            {form.phone?.trim() ? (
+              <p className="mt-1 text-xs text-gray-500">
+                SMS will be sent to <span className="font-medium text-gray-700">{form.phone.trim()}</span> once
+                confirmed.
+              </p>
+            ) : null}
+            <p className="mt-2 text-sm text-gray-500">
+              If you added an email, check your inbox for updates while your booking is pending.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center sm:gap-4">
               <button
@@ -210,14 +262,19 @@ export default function BookingForm() {
                 New booking request
               </p>
               <p className="mt-0.5 max-w-3xl text-xs text-gray-600 lg:text-sm">
-                Account details are locked; edit them in your profile if we add
-                that later.
+                Account details are locked; edit them in your profile if we add that later.
+                After admin confirms your booking, you will receive an SMS on your phone.
               </p>
             </div>
 
             <form
               onSubmit={(e) => {
                 e.preventDefault();
+                const paymentError = validatePaymentForSubmit();
+                if (paymentError) {
+                  showToast(paymentError);
+                  return;
+                }
                 mutation.mutate();
               }}
             >
@@ -323,8 +380,8 @@ export default function BookingForm() {
                       </span>
                       <p className="text-xs text-gray-500">
                         Options list your full block (e.g. 3h from 06:00 →
-                        06:00–09:00). Value sent to the server is still the
-                        first one-hour slot.
+                        06:00–09:00). Unavailable times are disabled once you
+                        pick a date.
                       </p>
                       <div className="relative">
                         <select
@@ -335,23 +392,36 @@ export default function BookingForm() {
                             setForm({ ...form, time_slot: e.target.value });
                           }}
                           required
-                          disabled={slotsLoading}
+                          disabled={
+                            slotsLoading ||
+                            (Boolean(form.booking_date) && availabilityLoading)
+                          }
                         >
                           <option value="">
                             {slotsLoading
                               ? "Loading slots…"
-                              : "Select start time"}
+                              : !form.booking_date
+                                ? "Select a date first"
+                                : availabilityLoading
+                                  ? "Checking availability…"
+                                  : "Select start time"}
                           </option>
                           {slots.map((s, i) => {
                             const valid = i + hoursClamped <= slots.length;
-                            const display = valid
+                            const booked = unavailableLabels.has(s.label);
+                            const range = valid
                               ? formatBlockRange(slots, i, hoursClamped)
-                              : `${parseSlotTimes(s.label)?.start ?? s.label} (not enough slots for ${hoursClamped}h)`;
+                              : null;
+                            const display = !valid
+                              ? `${parseSlotTimes(s.label)?.start ?? s.label} (not enough slots for ${hoursClamped}h)`
+                              : booked
+                                ? `${range} — already booked`
+                                : range;
                             return (
                               <option
                                 key={s.id}
                                 value={s.label}
-                                disabled={!valid}
+                                disabled={!valid || booked}
                               >
                                 {display}
                               </option>
@@ -382,38 +452,46 @@ export default function BookingForm() {
                     hint={
                       showScreenshot
                         ? "Pay with Fonepay using the QR below, then upload proof so we can verify your booking."
-                        : "If you choose paid or partial, we will show our Fonepay QR and ask for a payment screenshot."
+                        : "If you choose paid or advance, we will show our Fonepay QR and ask for a payment screenshot."
                     }
                   >
                     <div className="grid grid-cols-3 gap-2 rounded-xl bg-gray-100 p-1.5">
-                      {["pending", "paid", "partial"].map((v) => (
+                      {BOOKING_PAYMENT_STATUSES.map(({ value, label }) => (
                         <button
-                          key={v}
+                          key={value}
                           type="button"
                           onClick={() =>
-                            setForm({ ...form, payment_status: v })
+                            setForm({ ...form, payment_status: value })
                           }
-                          className={`rounded-lg py-2.5 text-xs font-semibold capitalize transition sm:text-sm ${
-                            form.payment_status === v
+                          className={`rounded-lg py-2.5 text-xs font-semibold transition sm:text-sm ${
+                            form.payment_status === value
                               ? "bg-white text-emerald-900 shadow-sm ring-1 ring-gray-200/90"
                               : "text-gray-600 hover:text-gray-900"
                           }`}
                         >
-                          {v}
+                          {label}
                         </button>
                       ))}
                     </div>
-                    <Input
-                      label="Payment amount"
-                      type="number"
-                      min={0}
-                      step="0.01"
-                      value={form.payment_amount}
-                      onChange={(e) =>
-                        setForm({ ...form, payment_amount: e.target.value })
-                      }
-                      required
-                    />
+                    <div className="space-y-1">
+                      <Input
+                        label="Payment amount"
+                        type="number"
+                        min={showScreenshot ? 0.01 : 0}
+                        step="0.01"
+                        value={form.payment_amount}
+                        onChange={(e) =>
+                          setForm({ ...form, payment_amount: e.target.value })
+                        }
+                        required
+                      />
+                      {showScreenshot && (
+                        <p className="text-xs text-gray-500">
+                          Required: amount must be greater than 0 for{" "}
+                          {bookingPaymentStatusLabel(form.payment_status)}.
+                        </p>
+                      )}
+                    </div>
                     {showScreenshot && (
                       <div className="space-y-5">
                         <div className="rounded-xl border border-emerald-200/80 bg-gradient-to-b from-white to-emerald-50/40 p-4 shadow-sm ring-1 ring-emerald-900/5 sm:p-5">
@@ -475,7 +553,8 @@ export default function BookingForm() {
                             htmlFor="booking-payment-file"
                             className="text-sm font-medium text-gray-700"
                           >
-                            Payment proof (screenshot)
+                            Payment proof (screenshot){" "}
+                            <span className="text-red-600">*</span>
                           </label>
                           <p className="text-xs text-gray-500">
                             Upload the success screen from after you completed

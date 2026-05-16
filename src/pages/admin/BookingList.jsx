@@ -14,6 +14,7 @@ import {
   cancelBooking,
 } from '../../api/bookings';
 import { formatCurrency } from '../../utils/formatCurrency';
+import { resolveMediaUrl } from '../../utils/resolveMediaUrl';
 import { useToast } from '../../context/ToastContext';
 
 function buildPageList(current, last) {
@@ -144,7 +145,7 @@ export default function BookingList() {
     setPaymentSaving(true);
     try {
       await updateBookingPayment(b.id, { payment_status: 'partial', payment_amount: amount });
-      showToast('Marked as partial payment');
+      showToast('Marked as advance payment');
       qc.invalidateQueries({ queryKey: ['bookings'] });
       setDetail((d) => (d && d.id === b.id ? { ...d, payment_status: 'partial', payment_amount: String(amount) } : d));
       setPaymentEdit(null);
@@ -157,8 +158,25 @@ export default function BookingList() {
 
   async function onConfirm(id) {
     try {
-      await confirmBooking(id);
-      showToast('Booking confirmed');
+      const { data } = await confirmBooking(id);
+      const sms = data?.booking_confirmed_sms;
+      if (sms?.success) {
+        showToast('Booking confirmed. Confirmation SMS sent.');
+      } else if (sms?.reason === 'no_phone') {
+        showToast('Booking confirmed (no phone on booking for SMS).');
+      } else if (sms?.reason === 'sms_not_configured') {
+        showToast('Booking confirmed. Set SMSPASAL_KEY in API .env to send confirmation SMS.');
+      } else if (sms?.reason === 'duplicate_same_day') {
+        showToast('Booking confirmed. Confirmation SMS skipped (already sent today).');
+      } else if (sms) {
+        showToast(
+          sms.failure_message
+            ? `Booking confirmed. SMS failed: ${sms.failure_message}`
+            : 'Booking confirmed. Confirmation SMS could not be sent.',
+        );
+      } else {
+        showToast('Booking confirmed');
+      }
       qc.invalidateQueries({ queryKey: ['bookings'] });
       setDetail(null);
     } catch (e) {
@@ -429,9 +447,30 @@ export default function BookingList() {
               </p>
             )}
             {detail.payment_screenshot_url && (
-              <a href={detail.payment_screenshot_url} target="_blank" rel="noreferrer" className="text-green-700 underline">
-                View payment screenshot
-              </a>
+              <div className="space-y-2 border-t border-gray-100 pt-3">
+                <p className="font-semibold text-gray-900">Payment proof</p>
+                {/\.pdf(\?|$)/i.test(detail.payment_screenshot_url) ? (
+                  <iframe
+                    title="Payment proof"
+                    src={resolveMediaUrl(detail.payment_screenshot_url)}
+                    className="h-72 w-full rounded-lg border border-gray-200 bg-gray-50"
+                  />
+                ) : (
+                  <img
+                    src={resolveMediaUrl(detail.payment_screenshot_url)}
+                    alt="Payment proof screenshot"
+                    className="max-h-80 w-full rounded-lg border border-gray-200 bg-gray-50 object-contain"
+                  />
+                )}
+                <a
+                  href={resolveMediaUrl(detail.payment_screenshot_url)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-block text-xs font-medium text-emerald-700 hover:underline"
+                >
+                  Open full size in new tab
+                </a>
+              </div>
             )}
             <div className="flex flex-wrap gap-2 border-t border-gray-100 pt-3">
               {!['cancelled', 'rejected'].includes(detail.status) && (
@@ -488,7 +527,7 @@ export default function BookingList() {
                 Save amount
               </Button>
               <Button variant="secondary" className="!text-sm" onClick={onMarkPartialModal} disabled={paymentSaving}>
-                Mark partial
+                Mark advance
               </Button>
               <Button
                 variant="primary"
@@ -533,7 +572,7 @@ export default function BookingList() {
               />
               <p className="mt-2 text-xs leading-relaxed text-gray-500">
                 <strong className="font-medium text-gray-700">Save amount</strong> updates the NPR total and keeps the
-                current payment status. <strong className="font-medium text-gray-700">Mark partial</strong> or{' '}
+                current payment status. <strong className="font-medium text-gray-700">Mark advance</strong> or{' '}
                 <strong className="font-medium text-gray-700">Mark paid</strong> updates both the amount and the pay
                 badge.
               </p>

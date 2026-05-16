@@ -1,5 +1,8 @@
 import api from './axios';
 
+export const getSlotAvailability = (params) =>
+  api.get('/bookings/slot-availability', { params });
+
 export const listBookings = (params) => api.get('/bookings', { params });
 export const createBooking = (payload) => api.post('/bookings', payload);
 export const customerBooking = (payload, config) => api.post('/bookings/customer', payload, config);

@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useState } from 'react';
 import PageHeader from '../../components/ui/PageHeader';
 import Button from '../../components/ui/Button';
@@ -9,6 +9,7 @@ import { listStudents, updateStudent, deleteStudent } from '../../api/students';
 import { listSmsLogs, sendStudentPaymentReminder } from '../../api/sms';
 import { useToast } from '../../context/ToastContext';
 import { useCompany } from '../../context/CompanyContext';
+import StudentPaymentPanel from '../../components/admin/StudentPaymentPanel';
 
 /** First token of full name for short SMS salutation */
 function studentFirstName(fullName) {
@@ -25,10 +26,10 @@ function buildFriendlyPaymentReminderSms(company, student) {
 }
 
 export default function StudentList() {
-  const navigate = useNavigate();
   const { showToast } = useToast();
   const qc = useQueryClient();
   const [smsStudent, setSmsStudent] = useState(null);
+  const [paymentStudentId, setPaymentStudentId] = useState(null);
   const [smsMessage, setSmsMessage] = useState('');
   const [smsSending, setSmsSending] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
@@ -122,6 +123,7 @@ export default function StudentList() {
       showToast('Student deleted');
       qc.invalidateQueries({ queryKey: ['students'] });
       if (smsStudent?.id === s.id) closeSmsModal();
+      if (paymentStudentId === s.id) setPaymentStudentId(null);
     } catch (e) {
       showToast(e.response?.data?.message || 'Failed to delete');
     } finally {
@@ -256,9 +258,7 @@ export default function StudentList() {
                       <Button
                         variant="primary"
                         className="!px-2 !py-1 !text-xs"
-                        onClick={() =>
-                          navigate(`/admin/students/${s.id}?addPayment=1`)
-                        }
+                        onClick={() => setPaymentStudentId(s.id)}
                       >
                         Payment
                       </Button>
@@ -280,6 +280,11 @@ export default function StudentList() {
           </table>
         </div>
       )}
+
+      <StudentPaymentPanel
+        studentId={paymentStudentId}
+        onClose={() => setPaymentStudentId(null)}
+      />
 
       <Modal
         open={Boolean(smsStudent)}

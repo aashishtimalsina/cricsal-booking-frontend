@@ -1,12 +1,13 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import PageHeader from '../../components/ui/PageHeader';
 import Button from '../../components/ui/Button';
 import Input, { fieldClass } from '../../components/ui/Input';
-import { createBooking } from '../../api/bookings';
+import { createBooking, getSlotAvailability } from '../../api/bookings';
 import { listTimeSlots } from '../../api/timeSlots';
 import { useToast } from '../../context/ToastContext';
+import { BOOKING_PAYMENT_STATUSES, DEFAULT_BOOKING_PAYMENT_STATUS } from '../../constants/bookingPayment';
 
 const selectClass = `${fieldClass} cursor-pointer appearance-none pr-10 disabled:cursor-not-allowed`;
 const selectPlainClass =
@@ -37,7 +38,7 @@ export default function BookingCreate() {
     booking_date: '',
     time_slot: '',
     hours: 1,
-    payment_status: 'pending',
+    payment_status: DEFAULT_BOOKING_PAYMENT_STATUS,
     payment_amount: 0,
     status: 'pending',
     notes: '',
@@ -55,12 +56,36 @@ export default function BookingCreate() {
 
   const hoursClamped = Math.max(1, Math.min(24, Number(form.hours) || 1));
 
+  const { data: availabilityRes, isLoading: availabilityLoading } = useQuery({
+    queryKey: ['slot-availability', 'admin', form.booking_date, hoursClamped],
+    queryFn: async () =>
+      (
+        await getSlotAvailability({
+          booking_date: form.booking_date,
+          hours: hoursClamped,
+        })
+      ).data,
+    enabled: Boolean(form.booking_date),
+  });
+
+  const unavailableLabels = useMemo(() => {
+    const list = availabilityRes?.data?.unavailable;
+    return new Set(Array.isArray(list) ? list : []);
+  }, [availabilityRes]);
+
   const selectedRangePreview = useMemo(() => {
     if (!form.time_slot || !slots.length) return null;
     const idx = slots.findIndex((s) => s.label === form.time_slot);
     if (idx < 0 || idx + hoursClamped > slots.length) return null;
     return formatBlockRange(slots, idx, hoursClamped);
   }, [form.time_slot, hoursClamped, slots]);
+
+  useEffect(() => {
+    if (!form.booking_date || !form.time_slot) return;
+    if (unavailableLabels.has(form.time_slot)) {
+      setForm((prev) => ({ ...prev, time_slot: '' }));
+    }
+  }, [form.booking_date, form.time_slot, unavailableLabels]);
 
   function setHoursAndMaybeClearSlot(h) {
     setSubmitError(null);
@@ -80,14 +105,27 @@ export default function BookingCreate() {
   async function onSubmit(e) {
     e.preventDefault();
     try {
-      await createBooking({
+      const { data } = await createBooking({
         ...form,
         email: form.email.trim() || null,
         hours: Number(form.hours),
         payment_amount: Number(form.payment_amount),
       });
       setSubmitError(null);
-      showToast('Booking created');
+      const sms = data?.booking_confirmed_sms;
+      if (form.status === 'confirmed') {
+        if (sms?.success) {
+          showToast('Booking created. Confirmation SMS sent.');
+        } else if (sms?.reason === 'duplicate_same_day') {
+          showToast('Booking created. Confirmation SMS skipped (already sent today).');
+        } else if (sms?.reason === 'skipped' || sms?.reason === 'no_phone') {
+          showToast('Booking created');
+        } else {
+          showToast('Booking created. Confirmation SMS could not be sent.');
+        }
+      } else {
+        showToast('Booking created');
+      }
       navigate('/admin/bookings');
     } catch (err) {
       const data = err.response?.data;
@@ -192,16 +230,30 @@ export default function BookingCreate() {
                 setForm({ ...form, time_slot: e.target.value });
               }}
               required
-              disabled={slotsLoading}
+              disabled={
+                slotsLoading || (Boolean(form.booking_date) && availabilityLoading)
+              }
             >
-              <option value="">{slotsLoading ? 'Loading slots…' : 'Select start shift'}</option>
+              <option value="">
+                {slotsLoading
+                  ? 'Loading slots…'
+                  : !form.booking_date
+                    ? 'Select a date first'
+                    : availabilityLoading
+                      ? 'Checking availability…'
+                      : 'Select start shift'}
+              </option>
               {slots.map((s, i) => {
                 const valid = i + hoursClamped <= slots.length;
-                const display = valid
-                  ? formatBlockRange(slots, i, hoursClamped)
-                  : `${parseSlotTimes(s.label)?.start ?? s.label} (not enough slots for ${hoursClamped}h)`;
+                const booked = unavailableLabels.has(s.label);
+                const range = valid ? formatBlockRange(slots, i, hoursClamped) : null;
+                const display = !valid
+                  ? `${parseSlotTimes(s.label)?.start ?? s.label} (not enough slots for ${hoursClamped}h)`
+                  : booked
+                    ? `${range} — already booked`
+                    : range;
                 return (
-                  <option key={s.id} value={s.label} disabled={!valid}>
+                  <option key={s.id} value={s.label} disabled={!valid || booked}>
                     {display}
                   </option>
                 );
@@ -223,9 +275,11 @@ export default function BookingCreate() {
             value={form.payment_status}
             onChange={(e) => setForm({ ...form, payment_status: e.target.value })}
           >
-            <option value="pending">Pending</option>
-            <option value="paid">Paid</option>
-            <option value="partial">Partial</option>
+            {BOOKING_PAYMENT_STATUSES.map(({ value, label }) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
           </select>
         </label>
 
