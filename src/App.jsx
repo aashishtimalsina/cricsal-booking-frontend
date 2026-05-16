@@ -17,6 +17,10 @@ import Reports from './pages/admin/Reports';
 import CustomerBookings from './pages/admin/CustomerBookings';
 import CustomerBookingDetail from './pages/admin/CustomerBookingDetail';
 import SmsLogs from './pages/admin/SmsLogs';
+import UserList from './pages/admin/UserList';
+import UserCreate from './pages/admin/UserCreate';
+import UserEdit from './pages/admin/UserEdit';
+import ActivityLogs from './pages/admin/ActivityLogs';
 import RequireCustomer from './components/layout/RequireCustomer';
 import BookingForm from './pages/customer/BookingForm';
 import MyBookings from './pages/customer/MyBookings';
@@ -77,6 +81,10 @@ export default function App() {
         <Route path="loyalty/rules" element={<LoyaltyRules />} />
         <Route path="loyalty/cards" element={<LoyaltyCards />} />
         <Route path="reports" element={<Reports />} />
+        <Route path="users" element={<UserList />} />
+        <Route path="users/new" element={<UserCreate />} />
+        <Route path="users/:id/edit" element={<UserEdit />} />
+        <Route path="activity-logs" element={<ActivityLogs />} />
         <Route path="sms-logs" element={<SmsLogs />} />
       </Route>
       <Route path="*" element={<Navigate to="/book" replace />} />

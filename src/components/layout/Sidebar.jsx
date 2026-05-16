@@ -1,13 +1,6 @@
 import { NavLink } from "react-router-dom";
 import { useCompany } from "../../context/CompanyContext";
 
-function brandInitials(name) {
-  if (!name?.trim()) return "AD";
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
-  return name.slice(0, 2).toUpperCase();
-}
-
 function Icon({ children, className = "" }) {
   return (
     <svg
@@ -206,6 +199,33 @@ function IconMessage() {
   );
 }
 
+function IconShield() {
+  return (
+    <Icon>
+      <path
+        d="M12 3l7 3v5c0 4.5-2.8 7.5-7 9-4.2-1.5-7-4.5-7-9V6l7-3z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+    </Icon>
+  );
+}
+
+function IconHistory() {
+  return (
+    <Icon>
+      <path
+        d="M12 8v4l3 2M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Icon>
+  );
+}
+
 const NAV = [
   { to: "/admin/dashboard", label: "Dashboard", Icon: IconDashboard },
   { to: "/admin/bookings", label: "Bookings", Icon: IconCalendar },
@@ -218,13 +238,14 @@ const NAV = [
   { to: "/admin/loyalty/rules", label: "Loyalty rules", Icon: IconSliders },
   { to: "/admin/loyalty/cards", label: "Loyalty cards", Icon: IconCard },
   { to: "/admin/reports", label: "Reports", Icon: IconChart },
+  { to: "/admin/users", label: "Users", Icon: IconShield },
+  { to: "/admin/activity-logs", label: "Activity logs", Icon: IconHistory },
   { to: "/admin/sms-logs", label: "SMS logs", Icon: IconMessage },
   { to: "/admin/time-slots", label: "Time slots", Icon: IconClock },
 ];
 
 export default function Sidebar() {
   const { company } = useCompany();
-  const initials = brandInitials(company?.name);
 
   return (
     <aside className="flex w-64 flex-col border-r border-slate-800/80 bg-slate-950 text-slate-100 shadow-[4px_0_24px_-4px_rgba(0,0,0,0.35)]">
@@ -233,18 +254,12 @@ export default function Sidebar() {
           className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-emerald-500/25 to-transparent"
           aria-hidden
         />
-        <div className="flex items-start gap-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-700 text-sm font-bold tracking-tight text-white shadow-lg shadow-emerald-950/40 ring-1 ring-white/10">
-            {initials}
-          </div>
-          <div className="min-w-0 pt-0.5">
-            <p className="truncate text-[15px] font-semibold leading-tight tracking-tight text-white">
-              {company?.name}
-            </p>
-            <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-400/90">
-              Admin
-            </p>
-          </div>
+        <div className="flex items-center">
+          <img
+            src="/jca-admin-brand.png"
+            alt={company?.name ? `${company.name} admin` : 'JCA Admin'}
+            className="h-11 w-auto max-w-[11rem] object-contain object-left"
+          />
         </div>
       </div>
 
